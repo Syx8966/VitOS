@@ -1,10 +1,20 @@
 # Build outputs
 /target/
+/target-rv/
+/target-la/
 /.axconfig.toml
+/.axconfig-rv.toml
+/.axconfig-la.toml
 /kernel-rv
 /kernel-la
+/kernel-rv.bin
+/kernel-la.bin
 /disk.img
 /disk-la.img
+
+# ArceOS app build outputs
+/apps/*/*.elf
+/apps/*/*.bin
 
 # Local toolchain/cache created during bootstrap
 /.cargo-home/

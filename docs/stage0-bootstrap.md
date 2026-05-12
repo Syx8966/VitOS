@@ -144,7 +144,7 @@ disk.img
 disk-la.img
 ```
 
-阶段 0 先只保留占位 Makefile，等最小内核应用确定后再接入真实构建。
+阶段 0 已将 ArceOS helloworld 临时接入 `make all`，用于验证赛方产物形态。后续进入阶段 1 后，应将 `examples/helloworld` 替换为本队的最小内核应用。
 
 ### 3. 梳理 syscall 表
 
@@ -194,11 +194,11 @@ qemu-system-riscv64 -machine virt -kernel kernel-rv -m <mem> -nographic -smp <sm
 - [x] 拉取 `third_party/arceos`。
 - [x] 拉取 `third_party/reference/starry-next`。
 - [x] 记录 ArceOS commit id。
-- [x] 创建根目录阶段 0 Makefile 占位目标。
+- [x] 创建根目录阶段 0 Makefile 目标。
 - [x] 跑通 `make A=examples/helloworld ARCH=riscv64 LOG=info`。
 - [x] 跑通 `make A=examples/helloworld ARCH=riscv64 LOG=info run`。
 - [x] 生成第一版 `docs/syscall-table.md`。
-- [ ] 根目录 `Makefile` 接入真实 `kernel-rv` / `kernel-la` 构建。
+- [x] 根目录 `Makefile` 接入真实 `kernel-rv` / `kernel-la` 构建。
 
 ## 阶段 0 之后进入阶段 1
 
