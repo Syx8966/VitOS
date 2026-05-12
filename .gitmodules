@@ -1,0 +1,6 @@
+[submodule "third_party/arceos"]
+	path = third_party/arceos
+	url = https://github.com/arceos-org/arceos.git
+[submodule "third_party/reference/starry-next"]
+	path = third_party/reference/starry-next
+	url = https://www.gitlink.org.cn/oscomp/starry-next.git

@@ -1,0 +1,31 @@
+# Build outputs
+/target/
+/.axconfig.toml
+/kernel-rv
+/kernel-la
+/disk.img
+/disk-la.img
+
+# Local toolchain/cache created during bootstrap
+/.cargo-home/
+/.rustup-home/
+/.toolchain/
+
+# Logs and test results
+*.log
+qemu.log
+netdump.pcap
+/tests/results/
+
+# Generated rootfs images
+/rootfs/image/
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Codex/session metadata
+/.agents/
+/.codex/
