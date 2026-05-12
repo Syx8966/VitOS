@@ -5,6 +5,10 @@ edition = "2024"
 
 [dependencies]
 axstd = { path = "../../third_party/arceos/ulib/axstd", optional = true }
+vitos-kernel = { path = "../../crates/kernel" }
+
+[features]
+axstd = ["dep:axstd", "vitos-kernel/axstd"]
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
 axplat-riscv64-qemu-virt = "0.4.1"

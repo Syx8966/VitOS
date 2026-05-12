@@ -16,4 +16,8 @@ fn main() {
     println!("base_os = ArceOS");
     println!("arch = {}", arch_name());
     println!("status = minimal app booted");
+    println!("===Vitality OS===");
+    println!("Hello from VitOS!");
+    println!("=================");
+    vitos_kernel::init();
 }

@@ -1,0 +1,11 @@
+[package]
+name = "vitos-kernel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axstd = { path = "../../third_party/arceos/ulib/axstd", optional = true }
+linux-abi = { path = "../linux-abi" }
+
+[features]
+axstd = ["dep:axstd", "linux-abi/axstd"]
