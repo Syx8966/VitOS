@@ -2,6 +2,8 @@
 /target/
 /target-rv/
 /target-la/
+/crates/*/target/
+/crates/*/Cargo.lock
 /.axconfig.toml
 /.axconfig-rv.toml
 /.axconfig-la.toml

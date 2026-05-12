@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "axstd", no_std)]
 
+pub mod elf;
 pub mod loader;
 
 #[cfg(feature = "axstd")]
