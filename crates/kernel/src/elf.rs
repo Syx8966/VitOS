@@ -159,12 +159,15 @@ pub fn parse(bytes: &[u8]) -> Result<ParsedElf, ElfError> {
     })
 }
 
-pub fn smoke_test() -> Result<ParsedElf, ElfError> {
-    let elf = match option_env!("VITOS_BOOT_ARCH") {
+pub fn embedded_user_hello_for_current_arch() -> &'static [u8] {
+    match option_env!("VITOS_BOOT_ARCH") {
         Some("loongarch64") => embedded_user_hello_la(),
         _ => embedded_user_hello_rv(),
-    };
-    let parsed = parse(elf)?;
+    }
+}
+
+pub fn smoke_test() -> Result<ParsedElf, ElfError> {
+    let parsed = parse(embedded_user_hello_for_current_arch())?;
 
     #[cfg(feature = "axstd")]
     {
@@ -183,11 +186,11 @@ pub fn smoke_test() -> Result<ParsedElf, ElfError> {
     Ok(parsed)
 }
 
-fn embedded_user_hello_rv() -> &'static [u8] {
+pub fn embedded_user_hello_rv() -> &'static [u8] {
     include_bytes!(env!("VITOS_USER_HELLO_RV"))
 }
 
-fn embedded_user_hello_la() -> &'static [u8] {
+pub fn embedded_user_hello_la() -> &'static [u8] {
     include_bytes!(env!("VITOS_USER_HELLO_LA"))
 }
 

@@ -5,7 +5,12 @@ edition = "2024"
 
 [dependencies]
 axstd = { path = "../../third_party/arceos/ulib/axstd", optional = true }
+axhal = { path = "../../third_party/arceos/modules/axhal", features = ["uspace"], optional = true }
+axmm = { path = "../../third_party/arceos/modules/axmm", optional = true }
 linux-abi = { path = "../linux-abi" }
+linkme = { version = "0.3.33", optional = true }
+memory_addr = { version = "0.4", optional = true }
 
 [features]
 axstd = ["dep:axstd", "linux-abi/axstd"]
+uspace = ["axstd", "dep:axhal", "dep:axmm", "dep:linkme", "dep:memory_addr"]

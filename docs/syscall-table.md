@@ -31,9 +31,9 @@
 | 59 | pipe2 | fs/pipe | P1 | todo | shell/IPC 常用 |
 | 61 | getdents64 | fs/dir | P1 | todo | ls/目录遍历 |
 | 63 | read | fs/fd | P0 | todo | 最小 IO |
-| 64 | write | fs/fd | P0 | todo | hello 输出 |
+| 64 | write | fs/fd | P0 | partial | 支持 fd=1/2 输出到 console |
 | 80 | fstat | fs/fd | P1 | todo | libc/busybox 常用 |
-| 93 | exit | process | P0 | todo | 进程退出 |
+| 93 | exit | process | P0 | partial | 单用户程序退出后关机 |
 | 101 | nanosleep | time | P1 | todo | 时间相关测例 |
 | 124 | sched_yield | sched | P1 | todo | 可先让出 CPU |
 | 153 | times | time | P1 | todo | 进程时间 |

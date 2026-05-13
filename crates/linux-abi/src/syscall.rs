@@ -7,6 +7,7 @@ pub const SYS_EXIT: usize = 93;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SyscallStatus {
     TraceOnly,
+    Implemented,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -20,12 +21,12 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
     SyscallInfo {
         nr: SYS_WRITE,
         name: "write",
-        status: SyscallStatus::TraceOnly,
+        status: SyscallStatus::Implemented,
     },
     SyscallInfo {
         nr: SYS_EXIT,
         name: "exit",
-        status: SyscallStatus::TraceOnly,
+        status: SyscallStatus::Implemented,
     },
 ];
 
