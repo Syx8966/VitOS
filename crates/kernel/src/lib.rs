@@ -2,7 +2,9 @@
 
 pub mod elf;
 pub mod loader;
+pub mod runner;
 pub mod runtime;
+pub mod testdisk;
 
 #[cfg(feature = "axstd")]
 use axstd::println;
@@ -14,8 +16,5 @@ pub fn init() {
     #[cfg(feature = "axstd")]
     println!("stage2 = loader/syscall scaffold ready");
 
-    if let Err(_err) = runtime::run_embedded_hello() {
-        #[cfg(feature = "axstd")]
-        println!("[runtime] failed: {:?}", _err);
-    }
+    runner::run_stage3();
 }

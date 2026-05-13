@@ -8,6 +8,11 @@ if [[ ! -f kernel-rv.bin ]]; then
     exit 1
 fi
 
+drive_args=()
+if [[ -n "${TEST_IMG:-}" ]]; then
+    drive_args=(-drive "file=${TEST_IMG},if=none,format=raw,id=testdisk" -device virtio-blk-device,drive=testdisk)
+fi
+
 qemu-system-riscv64 \
     -machine virt \
     -kernel kernel-rv.bin \
@@ -15,4 +20,5 @@ qemu-system-riscv64 \
     -nographic \
     -smp "${SMP:-1}" \
     -bios default \
+    "${drive_args[@]}" \
     -no-reboot

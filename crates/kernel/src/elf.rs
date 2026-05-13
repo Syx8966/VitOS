@@ -166,6 +166,13 @@ pub fn embedded_user_hello_for_current_arch() -> &'static [u8] {
     }
 }
 
+pub fn embedded_local_basic_for_current_arch() -> &'static [u8] {
+    match option_env!("VITOS_BOOT_ARCH") {
+        Some("loongarch64") => embedded_local_basic_la(),
+        _ => embedded_local_basic_rv(),
+    }
+}
+
 pub fn smoke_test() -> Result<ParsedElf, ElfError> {
     let parsed = parse(embedded_user_hello_for_current_arch())?;
 
@@ -192,6 +199,14 @@ pub fn embedded_user_hello_rv() -> &'static [u8] {
 
 pub fn embedded_user_hello_la() -> &'static [u8] {
     include_bytes!(env!("VITOS_USER_HELLO_LA"))
+}
+
+pub fn embedded_local_basic_rv() -> &'static [u8] {
+    include_bytes!(env!("VITOS_LOCAL_BASIC_RV"))
+}
+
+pub fn embedded_local_basic_la() -> &'static [u8] {
+    include_bytes!(env!("VITOS_LOCAL_BASIC_LA"))
 }
 
 #[cfg(test)]
@@ -226,6 +241,18 @@ mod tests {
         assert_eq!(segment.vaddr, 0x400000);
         assert!(segment.filesz <= segment.memsz);
         assert_eq!(segment.flags, 0x5);
+    }
+
+    #[test]
+    fn parses_embedded_local_basic_elves() {
+        let rv = parse(embedded_local_basic_rv()).expect("RISC-V64 local-basic ELF should parse");
+        let la =
+            parse(embedded_local_basic_la()).expect("LoongArch64 local-basic ELF should parse");
+
+        assert_eq!(rv.header.machine, EM_RISCV);
+        assert_eq!(la.header.machine, EM_LOONGARCH);
+        assert!(rv.load_segment_count >= 1);
+        assert!(la.load_segment_count >= 1);
     }
 
     #[test]

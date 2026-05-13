@@ -1,0 +1,378 @@
+#![no_std]
+#![no_main]
+
+use core::arch::global_asm;
+use core::panic::PanicInfo;
+
+#[cfg(target_arch = "riscv64")]
+global_asm!(
+    r#"
+    .section .text.entry, "ax"
+    .globl _start
+_start:
+    addi sp, sp, -512
+
+    li a0, 1
+    la a1, start_msg
+    li a2, 19
+    li a7, 64
+    ecall
+
+    li a0, 1
+    la a1, brk_msg
+    li a2, 13
+    li a7, 64
+    ecall
+
+    li a0, 0
+    li a7, 214
+    ecall
+    beqz a0, fail
+    mv s0, a0
+
+    li a0, 1
+    la a1, brk0_msg
+    li a2, 11
+    li a7, 64
+    ecall
+
+    li t0, 4096
+    add a0, s0, t0
+    mv s1, a0
+    li a7, 214
+    ecall
+    bltu a0, s1, fail
+
+    li a0, 1
+    la a1, brk1_msg
+    li a2, 13
+    li a7, 64
+    ecall
+
+    li a0, 1
+    la a1, mmap_msg
+    li a2, 14
+    li a7, 64
+    ecall
+
+    li a0, 0
+    li a1, 4096
+    li a2, 3
+    li a3, 0x22
+    li a4, -1
+    li a5, 0
+    li a7, 222
+    ecall
+    bltz a0, fail
+    mv s2, a0
+    li t0, 0x41
+    sb t0, 0(s2)
+
+    mv a0, s2
+    li a1, 4096
+    li a7, 215
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, time_msg
+    li a2, 14
+    li a7, 64
+    ecall
+
+    mv a0, sp
+    li a1, 0
+    li a7, 169
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, uname_msg
+    li a2, 15
+    li a7, 64
+    ecall
+
+    addi a0, sp, 32
+    li a7, 160
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, yield_msg
+    li a2, 15
+    li a7, 64
+    ecall
+
+    li a7, 124
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, sleep_msg
+    li a2, 15
+    li a7, 64
+    ecall
+
+    sd zero, 448(sp)
+    sd zero, 456(sp)
+    addi a0, sp, 448
+    li a1, 0
+    li a7, 101
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, fstat_msg
+    li a2, 15
+    li a7, 64
+    ecall
+
+    li a0, 1
+    addi a1, sp, 64
+    li a7, 80
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, ok_msg
+    li a2, 30
+    li a7, 64
+    ecall
+
+    li a0, 0
+    li a7, 93
+    ecall
+
+fail:
+    li a0, 1
+    la a1, fail_msg
+    li a2, 18
+    li a7, 64
+    ecall
+
+    li a0, 1
+    li a7, 93
+    ecall
+
+1:
+    j 1b
+
+    .section .rodata, "a"
+start_msg:
+    .ascii "local-basic: start\n"
+start_msg_end:
+ok_msg:
+    .ascii "local-basic: syscall smoke ok\n"
+ok_msg_end:
+brk_msg:
+    .ascii "check: brk()\n"
+brk0_msg:
+    .ascii "brk(0): ok\n"
+brk1_msg:
+    .ascii "brk grow: ok\n"
+mmap_msg:
+    .ascii "check: mmap()\n"
+time_msg:
+    .ascii "check: time()\n"
+uname_msg:
+    .ascii "check: uname()\n"
+yield_msg:
+    .ascii "check: yield()\n"
+sleep_msg:
+    .ascii "check: sleep()\n"
+fstat_msg:
+    .ascii "check: fstat()\n"
+fail_msg:
+    .ascii "local-basic: FAIL\n"
+fail_msg_end:
+"#
+);
+
+#[cfg(target_arch = "loongarch64")]
+global_asm!(
+    r#"
+    .section .text.entry, "ax"
+    .globl _start
+_start:
+    addi.d $sp, $sp, -512
+
+    li.d $a0, 1
+    la.local $a1, start_msg
+    li.d $a2, 19
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 1
+    la.local $a1, brk_msg
+    li.d $a2, 13
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 0
+    li.d $a7, 214
+    syscall 0
+    beqz $a0, fail
+    move $s0, $a0
+
+    li.d $a0, 1
+    la.local $a1, brk0_msg
+    li.d $a2, 11
+    li.d $a7, 64
+    syscall 0
+
+    li.d $t0, 4096
+    add.d $a0, $s0, $t0
+    move $s1, $a0
+    li.d $a7, 214
+    syscall 0
+    bltu $a0, $s1, fail
+
+    li.d $a0, 1
+    la.local $a1, brk1_msg
+    li.d $a2, 13
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 1
+    la.local $a1, mmap_msg
+    li.d $a2, 14
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 0
+    li.d $a1, 4096
+    li.d $a2, 3
+    li.d $a3, 0x22
+    li.d $a4, -1
+    li.d $a5, 0
+    li.d $a7, 222
+    syscall 0
+    blt $a0, $zero, fail
+    move $s2, $a0
+    li.d $t0, 0x41
+    st.b $t0, $s2, 0
+
+    move $a0, $s2
+    li.d $a1, 4096
+    li.d $a7, 215
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, time_msg
+    li.d $a2, 14
+    li.d $a7, 64
+    syscall 0
+
+    move $a0, $sp
+    li.d $a1, 0
+    li.d $a7, 169
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, uname_msg
+    li.d $a2, 15
+    li.d $a7, 64
+    syscall 0
+
+    addi.d $a0, $sp, 32
+    li.d $a7, 160
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, yield_msg
+    li.d $a2, 15
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a7, 124
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, sleep_msg
+    li.d $a2, 15
+    li.d $a7, 64
+    syscall 0
+
+    st.d $zero, $sp, 448
+    st.d $zero, $sp, 456
+    addi.d $a0, $sp, 448
+    li.d $a1, 0
+    li.d $a7, 101
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, fstat_msg
+    li.d $a2, 15
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 1
+    addi.d $a1, $sp, 64
+    li.d $a7, 80
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, ok_msg
+    li.d $a2, 30
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 0
+    li.d $a7, 93
+    syscall 0
+
+fail:
+    li.d $a0, 1
+    la.local $a1, fail_msg
+    li.d $a2, 18
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 1
+    li.d $a7, 93
+    syscall 0
+
+1:
+    b 1b
+
+    .section .rodata, "a"
+start_msg:
+    .ascii "local-basic: start\n"
+start_msg_end:
+ok_msg:
+    .ascii "local-basic: syscall smoke ok\n"
+ok_msg_end:
+brk_msg:
+    .ascii "check: brk()\n"
+brk0_msg:
+    .ascii "brk(0): ok\n"
+brk1_msg:
+    .ascii "brk grow: ok\n"
+mmap_msg:
+    .ascii "check: mmap()\n"
+time_msg:
+    .ascii "check: time()\n"
+uname_msg:
+    .ascii "check: uname()\n"
+yield_msg:
+    .ascii "check: yield()\n"
+sleep_msg:
+    .ascii "check: sleep()\n"
+fstat_msg:
+    .ascii "check: fstat()\n"
+fail_msg:
+    .ascii "local-basic: FAIL\n"
+fail_msg_end:
+"#
+);
+
+#[panic_handler]
+fn panic(_info: &PanicInfo) -> ! {
+    loop {}
+}

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+arceos_api = { path = "../../third_party/arceos/api/arceos_api", features = ["multitask"], optional = true }
 axstd = { path = "../../third_party/arceos/ulib/axstd", optional = true }
 axhal = { path = "../../third_party/arceos/modules/axhal", features = ["uspace"], optional = true }
 axmm = { path = "../../third_party/arceos/modules/axmm", optional = true }
@@ -11,6 +12,12 @@ linux-abi = { path = "../linux-abi" }
 linkme = { version = "0.3.33", optional = true }
 memory_addr = { version = "0.4", optional = true }
 
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+axdriver = { path = "../../third_party/arceos/modules/axdriver", features = ["virtio-blk", "bus-mmio"] }
+
+[target.'cfg(target_arch = "loongarch64")'.dependencies]
+axdriver = { path = "../../third_party/arceos/modules/axdriver", features = ["virtio-blk", "bus-pci"] }
+
 [features]
 axstd = ["dep:axstd", "linux-abi/axstd"]
-uspace = ["axstd", "dep:axhal", "dep:axmm", "dep:linkme", "dep:memory_addr"]
+uspace = ["axstd", "dep:arceos_api", "dep:axhal", "dep:axmm", "dep:linkme", "dep:memory_addr"]
