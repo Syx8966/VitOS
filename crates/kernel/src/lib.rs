@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "axstd", no_std)]
 
 pub mod elf;
+pub mod fd;
 pub mod loader;
 pub mod runner;
 pub mod runtime;

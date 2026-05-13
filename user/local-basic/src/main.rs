@@ -134,6 +134,91 @@ _start:
     bnez a0, fail
 
     li a0, 1
+    la a1, fs_msg
+    li a2, 12
+    li a7, 64
+    ecall
+
+    li a0, -100
+    la a1, file_path
+    li a2, 0
+    li a3, 0
+    li a7, 56
+    ecall
+    li t0, -19
+    beq a0, t0, fs_skip
+    li t0, -2
+    beq a0, t0, fs_skip
+    bltz a0, fail
+    mv s3, a0
+
+    mv a0, s3
+    addi a1, sp, 64
+    li a7, 80
+    ecall
+    bnez a0, fail
+
+    mv a0, s3
+    addi a1, sp, 320
+    li a2, 4
+    li a7, 63
+    ecall
+    li t0, 4
+    bne a0, t0, fail
+    lb t0, 320(sp)
+    li t1, 0x7f
+    bne t0, t1, fail
+    lb t0, 321(sp)
+    li t1, 0x45
+    bne t0, t1, fail
+    lb t0, 322(sp)
+    li t1, 0x4c
+    bne t0, t1, fail
+    lb t0, 323(sp)
+    li t1, 0x46
+    bne t0, t1, fail
+
+    mv a0, s3
+    li a1, 0
+    li a2, 0
+    li a7, 62
+    ecall
+    bnez a0, fail
+
+    mv a0, s3
+    li a7, 57
+    ecall
+    bnez a0, fail
+
+    li a0, -100
+    la a1, dir_path
+    li a2, 0
+    li a3, 0
+    li a7, 56
+    ecall
+    bltz a0, fail
+    mv s3, a0
+
+    mv a0, s3
+    addi a1, sp, 320
+    li a2, 128
+    li a7, 61
+    ecall
+    blez a0, fail
+
+    mv a0, s3
+    li a7, 57
+    ecall
+    bnez a0, fail
+
+    li a0, 1
+    la a1, fs_ok_msg
+    li a2, 25
+    li a7, 64
+    ecall
+fs_skip:
+
+    li a0, 1
     la a1, ok_msg
     li a2, 30
     li a7, 64
@@ -182,6 +267,14 @@ sleep_msg:
     .ascii "check: sleep()\n"
 fstat_msg:
     .ascii "check: fstat()\n"
+fs_msg:
+    .ascii "check: fs()\n"
+fs_ok_msg:
+    .ascii "local-basic: fs smoke ok\n"
+file_path:
+    .asciz "/musl/basic/write"
+dir_path:
+    .asciz "/musl/basic"
 fail_msg:
     .ascii "local-basic: FAIL\n"
 fail_msg_end:
@@ -318,6 +411,91 @@ _start:
     bnez $a0, fail
 
     li.d $a0, 1
+    la.local $a1, fs_msg
+    li.d $a2, 12
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, -100
+    la.local $a1, file_path
+    li.d $a2, 0
+    li.d $a3, 0
+    li.d $a7, 56
+    syscall 0
+    li.d $t0, -19
+    beq $a0, $t0, fs_skip
+    li.d $t0, -2
+    beq $a0, $t0, fs_skip
+    blt $a0, $zero, fail
+    move $s3, $a0
+
+    move $a0, $s3
+    addi.d $a1, $sp, 64
+    li.d $a7, 80
+    syscall 0
+    bnez $a0, fail
+
+    move $a0, $s3
+    addi.d $a1, $sp, 320
+    li.d $a2, 4
+    li.d $a7, 63
+    syscall 0
+    li.d $t0, 4
+    bne $a0, $t0, fail
+    ld.b $t0, $sp, 320
+    li.d $t1, 0x7f
+    bne $t0, $t1, fail
+    ld.b $t0, $sp, 321
+    li.d $t1, 0x45
+    bne $t0, $t1, fail
+    ld.b $t0, $sp, 322
+    li.d $t1, 0x4c
+    bne $t0, $t1, fail
+    ld.b $t0, $sp, 323
+    li.d $t1, 0x46
+    bne $t0, $t1, fail
+
+    move $a0, $s3
+    li.d $a1, 0
+    li.d $a2, 0
+    li.d $a7, 62
+    syscall 0
+    bnez $a0, fail
+
+    move $a0, $s3
+    li.d $a7, 57
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, -100
+    la.local $a1, dir_path
+    li.d $a2, 0
+    li.d $a3, 0
+    li.d $a7, 56
+    syscall 0
+    blt $a0, $zero, fail
+    move $s3, $a0
+
+    move $a0, $s3
+    addi.d $a1, $sp, 320
+    li.d $a2, 128
+    li.d $a7, 61
+    syscall 0
+    bge $zero, $a0, fail
+
+    move $a0, $s3
+    li.d $a7, 57
+    syscall 0
+    bnez $a0, fail
+
+    li.d $a0, 1
+    la.local $a1, fs_ok_msg
+    li.d $a2, 25
+    li.d $a7, 64
+    syscall 0
+fs_skip:
+
+    li.d $a0, 1
     la.local $a1, ok_msg
     li.d $a2, 30
     li.d $a7, 64
@@ -366,6 +544,14 @@ sleep_msg:
     .ascii "check: sleep()\n"
 fstat_msg:
     .ascii "check: fstat()\n"
+fs_msg:
+    .ascii "check: fs()\n"
+fs_ok_msg:
+    .ascii "local-basic: fs smoke ok\n"
+file_path:
+    .asciz "/musl/basic/write"
+dir_path:
+    .asciz "/musl/basic"
 fail_msg:
     .ascii "local-basic: FAIL\n"
 fail_msg_end:

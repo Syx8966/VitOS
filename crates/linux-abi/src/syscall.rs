@@ -15,6 +15,7 @@ pub const SYS_OPENAT: usize = 56;
 pub const SYS_CLOSE: usize = 57;
 pub const SYS_PIPE2: usize = 59;
 pub const SYS_GETDENTS64: usize = 61;
+pub const SYS_LSEEK: usize = 62;
 pub const SYS_READ: usize = 63;
 pub const SYS_WRITE: usize = 64;
 pub const SYS_FSTAT: usize = 80;
@@ -50,7 +51,12 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
     SyscallInfo {
         nr: SYS_READ,
         name: "read",
-        status: SyscallStatus::TraceOnly,
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_OPENAT,
+        name: "openat",
+        status: SyscallStatus::Implemented,
     },
     SyscallInfo {
         nr: SYS_WRITE,
@@ -63,8 +69,18 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {
+        nr: SYS_LSEEK,
+        name: "lseek",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
         nr: SYS_FSTAT,
         name: "fstat",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_GETDENTS64,
+        name: "getdents64",
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {

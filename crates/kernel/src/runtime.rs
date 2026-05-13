@@ -13,13 +13,14 @@ mod imp {
     use linux_abi::syscall::{
         SYS_BRK, SYS_CHDIR, SYS_CLONE, SYS_CLOSE, SYS_DUP, SYS_DUP3, SYS_EXECVE, SYS_EXIT,
         SYS_FCNTL, SYS_FSTAT, SYS_GETCWD, SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID,
-        SYS_GETTIMEOFDAY, SYS_IOCTL, SYS_MKDIRAT, SYS_MMAP, SYS_MOUNT, SYS_MUNMAP, SYS_NANOSLEEP,
-        SYS_OPENAT, SYS_PIPE2, SYS_READ, SYS_SCHED_YIELD, SYS_TIMES, SYS_UMOUNT2, SYS_UNAME,
-        SYS_UNLINKAT, SYS_WAIT4, SYS_WRITE,
+        SYS_GETTIMEOFDAY, SYS_IOCTL, SYS_LSEEK, SYS_MKDIRAT, SYS_MMAP, SYS_MOUNT, SYS_MUNMAP,
+        SYS_NANOSLEEP, SYS_OPENAT, SYS_PIPE2, SYS_READ, SYS_SCHED_YIELD, SYS_TIMES, SYS_UMOUNT2,
+        SYS_UNAME, SYS_UNLINKAT, SYS_WAIT4, SYS_WRITE,
     };
     use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, va};
 
     use crate::elf::{self, LoadSegment, ParsedElf};
+    use crate::fd::{FdTable, ReadDirResult, linux_dirent64_reclen};
 
     const USER_ASPACE_BASE: usize = 0x1000;
     const USER_ASPACE_SIZE: usize = 0x0000_8000_0000_0000 - USER_ASPACE_BASE;
@@ -54,6 +55,7 @@ mod imp {
 
     struct UserContext {
         image: UserImage,
+        fds: FdTable,
         heap_end: usize,
         mmap_cursor: usize,
     }
@@ -88,6 +90,7 @@ mod imp {
         let heap_start = image.heap_start;
         let context = UserContext {
             image,
+            fds: FdTable::new(),
             heap_end: heap_start,
             mmap_cursor: USER_MMAP_BASE,
         };
@@ -206,6 +209,9 @@ mod imp {
             SYS_WRITE => sys_write(tf.arg0(), tf.arg1(), tf.arg2()),
             SYS_CLOSE => sys_close(tf.arg0()),
             SYS_FSTAT => sys_fstat(tf.arg0(), tf.arg1()),
+            SYS_LSEEK => sys_lseek(tf.arg0(), tf.arg1() as isize, tf.arg2()),
+            SYS_GETDENTS64 => sys_getdents64(tf.arg0(), tf.arg1(), tf.arg2()),
+            SYS_OPENAT => sys_openat(tf.arg0() as isize, tf.arg1(), tf.arg2(), tf.arg3()),
             SYS_EXIT => sys_exit(tf.arg0()),
             SYS_BRK => sys_brk(tf.arg0()),
             SYS_MMAP => sys_mmap(
@@ -229,8 +235,7 @@ mod imp {
             }
             SYS_MOUNT | SYS_UMOUNT2 => 0,
             SYS_DUP | SYS_DUP3 | SYS_FCNTL | SYS_IOCTL | SYS_GETCWD | SYS_CHDIR | SYS_MKDIRAT
-            | SYS_UNLINKAT | SYS_OPENAT | SYS_PIPE2 | SYS_GETDENTS64 | SYS_CLONE | SYS_EXECVE
-            | SYS_WAIT4 => {
+            | SYS_UNLINKAT | SYS_PIPE2 | SYS_CLONE | SYS_EXECVE | SYS_WAIT4 => {
                 #[cfg(feature = "axstd")]
                 println!("[syscall] unsupported pending-fs/proc nr={}", nr);
                 -38
@@ -243,11 +248,28 @@ mod imp {
         }
     }
 
-    fn sys_read(fd: usize, _buf: usize, _len: usize) -> isize {
-        match fd {
-            0 => 0,
-            _ => -9,
+    fn sys_read(fd: usize, buf: usize, len: usize) -> isize {
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let mut chunk = [0_u8; 256];
+        let mut total = 0;
+        while total < len {
+            let n = (len - total).min(chunk.len());
+            match context.fds.read(fd, &mut chunk[..n]) {
+                Ok(0) if total == 0 => return 0,
+                Ok(0) => break,
+                Ok(read) => {
+                    if write_user(buf + total, &chunk[..read]).is_err() {
+                        return -14;
+                    }
+                    total += read;
+                }
+                Err(err) => return err,
+            }
         }
+        total as isize
     }
 
     fn sys_write(fd: usize, buf: usize, len: usize) -> isize {
@@ -279,21 +301,85 @@ mod imp {
     }
 
     fn sys_close(fd: usize) -> isize {
-        match fd {
-            0..=2 => 0,
-            _ => -9,
+        match active_user_context_mut() {
+            Ok(context) => context.fds.close(fd),
+            Err(err) => err,
         }
     }
 
     fn sys_fstat(fd: usize, stat_buf: usize) -> isize {
-        if fd > 2 {
-            return -9;
-        }
-        let stat = [0_u8; 128];
-        if write_user(stat_buf, &stat).is_err() {
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let stat = match context.fds.stat(fd) {
+            Ok(stat) => stat,
+            Err(err) => return err,
+        };
+        let data = linux_stat_bytes(stat.mode, stat.size, stat.inode);
+        if write_user(stat_buf, &data).is_err() {
             return -14;
         }
         0
+    }
+
+    fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
+        match active_user_context_mut() {
+            Ok(context) => context.fds.seek(fd, offset, whence),
+            Err(err) => err,
+        }
+    }
+
+    fn sys_openat(dirfd: isize, path_ptr: usize, flags: usize, _mode: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        match active_user_context_mut() {
+            Ok(context) => match context.fds.openat(dirfd, &path, flags) {
+                Ok(fd) => fd as isize,
+                Err(err) => err,
+            },
+            Err(err) => err,
+        }
+    }
+
+    fn sys_getdents64(fd: usize, dirp: usize, len: usize) -> isize {
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let mut written = 0;
+        loop {
+            match context.fds.next_dirent(fd, len - written) {
+                Ok(ReadDirResult::Entry {
+                    inode,
+                    offset,
+                    file_type,
+                    name,
+                }) => {
+                    let reclen = linux_dirent64_reclen(name.len());
+                    let mut dirent = [0_u8; 280];
+                    if reclen > dirent.len() {
+                        return -22;
+                    }
+                    dirent[0..8].copy_from_slice(&inode.to_ne_bytes());
+                    dirent[8..16].copy_from_slice(&offset.to_ne_bytes());
+                    dirent[16..18].copy_from_slice(&(reclen as u16).to_ne_bytes());
+                    dirent[18] = file_type;
+                    dirent[19..19 + name.len()].copy_from_slice(name.as_bytes());
+                    if write_user(dirp + written, &dirent[..reclen]).is_err() {
+                        return -14;
+                    }
+                    written += reclen;
+                }
+                Ok(ReadDirResult::End) => return written as isize,
+                Ok(ReadDirResult::BufferTooSmall) => {
+                    return if written == 0 { -22 } else { written as isize };
+                }
+                Err(err) => return err,
+            }
+        }
     }
 
     fn sys_exit(code: usize) -> isize {
@@ -477,6 +563,23 @@ mod imp {
         Ok(())
     }
 
+    fn read_user_cstr(start: usize) -> Result<String, isize> {
+        let mut bytes = alloc::vec::Vec::new();
+        for offset in 0..4096 {
+            let mut byte = [0_u8; 1];
+            if read_user(start + offset, &mut byte).is_err() {
+                return Err(-14);
+            }
+            if byte[0] == 0 {
+                return core::str::from_utf8(&bytes)
+                    .map(String::from)
+                    .map_err(|_| -22);
+            }
+            bytes.push(byte[0]);
+        }
+        Err(-36)
+    }
+
     fn write_user(start: usize, buf: &[u8]) -> Result<(), ()> {
         let context = unsafe { ACTIVE_USER_CONTEXT.as_ref().ok_or(())? };
         if !context.image.aspace.can_access_range(
@@ -508,6 +611,20 @@ mod imp {
         let bytes = value.as_bytes();
         let len = bytes.len().min(64);
         buf[offset..offset + len].copy_from_slice(&bytes[..len]);
+    }
+
+    fn linux_stat_bytes(mode: u32, size: u64, inode: u64) -> [u8; 128] {
+        let mut stat = [0_u8; 128];
+        stat[0..8].copy_from_slice(&0_u64.to_ne_bytes());
+        stat[8..16].copy_from_slice(&inode.to_ne_bytes());
+        stat[16..20].copy_from_slice(&mode.to_ne_bytes());
+        stat[24..32].copy_from_slice(&1_u64.to_ne_bytes());
+        stat[32..36].copy_from_slice(&0_u32.to_ne_bytes());
+        stat[36..40].copy_from_slice(&0_u32.to_ne_bytes());
+        stat[48..56].copy_from_slice(&size.to_ne_bytes());
+        stat[56..64].copy_from_slice(&4096_i64.to_ne_bytes());
+        stat[64..72].copy_from_slice(&0_i64.to_ne_bytes());
+        stat
     }
 
     fn arch_name() -> &'static str {

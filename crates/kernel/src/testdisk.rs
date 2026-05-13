@@ -2,7 +2,7 @@
 mod imp {
     extern crate alloc;
 
-    use alloc::{vec, vec::Vec};
+    use alloc::{boxed::Box, string::String, vec, vec::Vec};
     use axdriver::prelude::BlockDriverOps;
     use axstd::println;
 
@@ -12,6 +12,19 @@ mod imp {
     const EXTENT_HEADER_MAGIC: u16 = 0xf30a;
     const INODE_ROOT: u32 = 2;
     const EXT4_NAME_LEN: usize = 255;
+    const EXT4_FT_REG_FILE: u8 = 1;
+    const EXT4_FT_DIR: u8 = 2;
+    const S_IFDIR: u16 = 0o040000;
+    const S_IFREG: u16 = 0o100000;
+
+    static mut MOUNTED_EXT4: *mut MountedExt4 = core::ptr::null_mut();
+
+    #[derive(Clone, Debug)]
+    pub struct DirEntry {
+        pub name: String,
+        pub file_type: u8,
+        pub inode: u32,
+    }
 
     #[derive(Debug)]
     pub enum TestDiskError {
@@ -41,22 +54,33 @@ mod imp {
         }
     }
 
+    pub fn read_file(path: &str) -> Result<Vec<u8>, TestDiskError> {
+        let mounted = mounted_ext4()?;
+        mounted
+            .fs
+            .read_file_path(&mut mounted.disk, normalize_path(path))
+    }
+
+    pub fn list_dir(path: &str) -> Result<Vec<DirEntry>, TestDiskError> {
+        let mounted = mounted_ext4()?;
+        mounted
+            .fs
+            .list_dir_path(&mut mounted.disk, normalize_path(path))
+    }
+
     fn try_smoke_and_read_basic_write() -> Result<Option<Vec<u8>>, TestDiskError> {
-        let mut all_devices = axdriver::init_drivers();
-        let block = all_devices
-            .block
-            .take_one()
-            .ok_or(TestDiskError::NoBlockDevice)?;
-        let mut disk = BlockDisk::new(block)?;
-        let fs = Ext4::open(&mut disk)?;
+        let mounted = mounted_ext4()?;
 
         println!(
             "[testdisk] EXT4 detected block_size={} inode_size={} inodes/group={} blocks/group={}",
-            fs.block_size, fs.inode_size, fs.inodes_per_group, fs.blocks_per_group
+            mounted.fs.block_size,
+            mounted.fs.inode_size,
+            mounted.fs.inodes_per_group,
+            mounted.fs.blocks_per_group
         );
 
         for path in ["musl", "glibc", "musl/basic", "glibc/basic"] {
-            match fs.lookup_path(&mut disk, path) {
+            match mounted.fs.lookup_path(&mut mounted.disk, path) {
                 Ok(inode) => println!("[testdisk] found /{} inode={}", path, inode),
                 Err(_) => println!("[testdisk] missing /{}", path),
             }
@@ -64,7 +88,7 @@ mod imp {
 
         let mut basic_write = None;
         for path in ["musl/basic/write", "musl/basic/brk", "glibc/basic/write"] {
-            match fs.read_file_path(&mut disk, path) {
+            match mounted.fs.read_file_path(&mut mounted.disk, path) {
                 Ok(bytes) => {
                     println!("[testdisk] read /{} size={}", path, bytes.len());
                     if path == "musl/basic/write" {
@@ -76,6 +100,31 @@ mod imp {
         }
 
         Ok(basic_write)
+    }
+
+    fn mounted_ext4() -> Result<&'static mut MountedExt4, TestDiskError> {
+        unsafe {
+            if MOUNTED_EXT4.is_null() {
+                let mut all_devices = axdriver::init_drivers();
+                let block = all_devices
+                    .block
+                    .take_one()
+                    .ok_or(TestDiskError::NoBlockDevice)?;
+                let mut disk = BlockDisk::new(block)?;
+                let fs = Ext4::open(&mut disk)?;
+                MOUNTED_EXT4 = Box::leak(Box::new(MountedExt4 { disk, fs }));
+            }
+            Ok(&mut *MOUNTED_EXT4)
+        }
+    }
+
+    fn normalize_path(path: &str) -> &str {
+        path.trim_start_matches('/')
+    }
+
+    struct MountedExt4 {
+        disk: BlockDisk,
+        fs: Ext4,
     }
 
     struct BlockDisk {
@@ -128,6 +177,7 @@ mod imp {
     #[derive(Clone)]
     struct Inode {
         size: u64,
+        mode: u16,
         flags: u32,
         block: [u8; 60],
     }
@@ -193,7 +243,58 @@ mod imp {
         ) -> Result<Vec<u8>, TestDiskError> {
             let inode_no = self.lookup_path(disk, path)?;
             let inode = self.read_inode(disk, inode_no)?;
+            if inode.mode & S_IFREG != S_IFREG {
+                return Err(TestDiskError::Unsupported);
+            }
             self.read_inode_data(disk, &inode)
+        }
+
+        fn list_dir_path(
+            &self,
+            disk: &mut BlockDisk,
+            path: &str,
+        ) -> Result<Vec<DirEntry>, TestDiskError> {
+            let inode_no = self.lookup_path(disk, path)?;
+            self.list_dir(disk, inode_no)
+        }
+
+        fn list_dir(
+            &self,
+            disk: &mut BlockDisk,
+            dir_inode: u32,
+        ) -> Result<Vec<DirEntry>, TestDiskError> {
+            let inode = self.read_inode(disk, dir_inode)?;
+            if inode.mode & S_IFDIR != S_IFDIR {
+                return Err(TestDiskError::NotFound);
+            }
+            let data = self.read_inode_data(disk, &inode)?;
+            let mut entries = Vec::new();
+            let mut offset = 0;
+            while offset + 8 <= data.len() {
+                let inode_no = le32(&data, offset);
+                let rec_len = le16(&data, offset + 4) as usize;
+                let name_len = data[offset + 6] as usize;
+                let file_type = data[offset + 7];
+                if rec_len < 8 || offset + rec_len > data.len() || name_len > EXT4_NAME_LEN {
+                    return Err(TestDiskError::Corrupt);
+                }
+                if inode_no != 0 && offset + 8 + name_len <= data.len() {
+                    let name_bytes = &data[offset + 8..offset + 8 + name_len];
+                    if let Ok(name) = core::str::from_utf8(name_bytes) {
+                        entries.push(DirEntry {
+                            name: String::from(name),
+                            file_type: if file_type == 0 {
+                                self.inode_file_type(disk, inode_no)?
+                            } else {
+                                file_type
+                            },
+                            inode: inode_no,
+                        });
+                    }
+                }
+                offset += rec_len;
+            }
+            Ok(entries)
         }
 
         fn lookup_child(
@@ -245,9 +346,25 @@ mod imp {
             block.copy_from_slice(&raw[40..100]);
             Ok(Inode {
                 size,
+                mode: le16(&raw, 0),
                 flags: le32(&raw, 32),
                 block,
             })
+        }
+
+        fn inode_file_type(
+            &self,
+            disk: &mut BlockDisk,
+            inode_no: u32,
+        ) -> Result<u8, TestDiskError> {
+            let inode = self.read_inode(disk, inode_no)?;
+            if inode.mode & S_IFDIR == S_IFDIR {
+                Ok(EXT4_FT_DIR)
+            } else if inode.mode & S_IFREG == S_IFREG {
+                Ok(EXT4_FT_REG_FILE)
+            } else {
+                Ok(0)
+            }
         }
 
         fn inode_table_block(
