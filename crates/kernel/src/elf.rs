@@ -160,7 +160,11 @@ pub fn parse(bytes: &[u8]) -> Result<ParsedElf, ElfError> {
 }
 
 pub fn smoke_test() -> Result<ParsedElf, ElfError> {
-    let parsed = parse(sample_static_elf())?;
+    let elf = match option_env!("VITOS_BOOT_ARCH") {
+        Some("loongarch64") => embedded_user_hello_la(),
+        _ => embedded_user_hello_rv(),
+    };
+    let parsed = parse(elf)?;
 
     #[cfg(feature = "axstd")]
     {
@@ -179,32 +183,12 @@ pub fn smoke_test() -> Result<ParsedElf, ElfError> {
     Ok(parsed)
 }
 
-fn sample_static_elf() -> &'static [u8] {
-    const SAMPLE: &[u8] = &[
-        0x7f, b'E', b'L', b'F', 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, // e_ident
-        2, 0, // e_type = ET_EXEC
-        243, 0, // e_machine = EM_RISCV
-        1, 0, 0, 0, // e_version
-        0, 0, 0x40, 0, 0, 0, 0, 0, // e_entry = 0x400000
-        64, 0, 0, 0, 0, 0, 0, 0, // e_phoff = 64
-        0, 0, 0, 0, 0, 0, 0, 0, // e_shoff = 0
-        0, 0, 0, 0, // e_flags
-        64, 0, // e_ehsize
-        56, 0, // e_phentsize
-        1, 0, // e_phnum
-        0, 0, // e_shentsize
-        0, 0, // e_shnum
-        0, 0, // e_shstrndx
-        1, 0, 0, 0, // p_type = PT_LOAD
-        5, 0, 0, 0, // p_flags = R | X
-        0, 0, 0, 0, 0, 0, 0, 0, // p_offset
-        0, 0, 0x40, 0, 0, 0, 0, 0, // p_vaddr = 0x400000
-        0, 0, 0x40, 0, 0, 0, 0, 0, // p_paddr = 0x400000
-        120, 0, 0, 0, 0, 0, 0, 0, // p_filesz
-        120, 0, 0, 0, 0, 0, 0, 0, // p_memsz
-        0x00, 0x10, 0, 0, 0, 0, 0, 0, // p_align = 0x1000
-    ];
-    SAMPLE
+fn embedded_user_hello_rv() -> &'static [u8] {
+    include_bytes!(env!("VITOS_USER_HELLO_RV"))
+}
+
+fn embedded_user_hello_la() -> &'static [u8] {
+    include_bytes!(env!("VITOS_USER_HELLO_LA"))
 }
 
 #[cfg(test)]
@@ -212,25 +196,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_sample_static_elf() {
-        let parsed = parse(sample_static_elf()).expect("sample ELF should parse");
+    fn parses_embedded_riscv64_hello_elf() {
+        let parsed = parse(embedded_user_hello_rv()).expect("RISC-V64 hello ELF should parse");
 
         assert_eq!(parsed.header.machine, EM_RISCV);
         assert_eq!(parsed.header.entry, 0x400000);
-        assert_eq!(parsed.header.phnum, 1);
-        assert_eq!(parsed.load_segment_count, 1);
+        assert!(parsed.header.phnum >= 1);
+        assert!(parsed.load_segment_count >= 1);
 
         let segment = parsed.load_segments().next().expect("LOAD segment");
-        assert_eq!(segment.offset, 0);
         assert_eq!(segment.vaddr, 0x400000);
-        assert_eq!(segment.filesz, 0x78);
-        assert_eq!(segment.memsz, 0x78);
+        assert!(segment.filesz <= segment.memsz);
+        assert_eq!(segment.flags, 0x5);
+    }
+
+    #[test]
+    fn parses_embedded_loongarch64_hello_elf() {
+        let parsed = parse(embedded_user_hello_la()).expect("LoongArch64 hello ELF should parse");
+
+        assert_eq!(parsed.header.machine, EM_LOONGARCH);
+        assert_eq!(parsed.header.entry, 0x400000);
+        assert!(parsed.header.phnum >= 1);
+        assert!(parsed.load_segment_count >= 1);
+
+        let segment = parsed.load_segments().next().expect("LOAD segment");
+        assert_eq!(segment.vaddr, 0x400000);
+        assert!(segment.filesz <= segment.memsz);
         assert_eq!(segment.flags, 0x5);
     }
 
     #[test]
     fn rejects_bad_magic() {
-        let mut bytes = sample_static_elf().to_vec();
+        let mut bytes = embedded_user_hello_rv().to_vec();
         bytes[0] = 0;
 
         assert_eq!(parse(&bytes), Err(ElfError::BadMagic));
@@ -238,7 +235,7 @@ mod tests {
 
     #[test]
     fn rejects_segment_larger_than_memory() {
-        let mut bytes = sample_static_elf().to_vec();
+        let mut bytes = embedded_user_hello_rv().to_vec();
         let filesz_offset = 64 + 32;
         let memsz_offset = 64 + 40;
         bytes[filesz_offset..filesz_offset + 8].copy_from_slice(&0x2000_u64.to_le_bytes());
