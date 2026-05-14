@@ -11,6 +11,7 @@ pub const SYS_UNLINKAT: usize = 35;
 pub const SYS_MOUNT: usize = 40;
 pub const SYS_UMOUNT2: usize = 39;
 pub const SYS_CHDIR: usize = 49;
+pub const SYS_READLINKAT: usize = 78;
 pub const SYS_OPENAT: usize = 56;
 pub const SYS_CLOSE: usize = 57;
 pub const SYS_PIPE2: usize = 59;
@@ -19,6 +20,10 @@ pub const SYS_LSEEK: usize = 62;
 pub const SYS_READ: usize = 63;
 pub const SYS_WRITE: usize = 64;
 pub const SYS_FSTAT: usize = 80;
+pub const SYS_NEWFSTATAT: usize = 79;
+pub const SYS_FACCESSAT: usize = 48;
+pub const SYS_STATFS: usize = 43;
+pub const SYS_FSTATFS: usize = 44;
 pub const SYS_NANOSLEEP: usize = 101;
 pub const SYS_SCHED_YIELD: usize = 124;
 pub const SYS_TIMES: usize = 153;
@@ -26,6 +31,7 @@ pub const SYS_UNAME: usize = 160;
 pub const SYS_GETTIMEOFDAY: usize = 169;
 pub const SYS_GETPID: usize = 172;
 pub const SYS_GETPPID: usize = 173;
+pub const SYS_GETTID: usize = 178;
 pub const SYS_EXIT: usize = 93;
 pub const SYS_BRK: usize = 214;
 pub const SYS_MUNMAP: usize = 215;
@@ -69,6 +75,26 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {
+        nr: SYS_DUP,
+        name: "dup",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_DUP3,
+        name: "dup3",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_FCNTL,
+        name: "fcntl",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_IOCTL,
+        name: "ioctl",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
         nr: SYS_LSEEK,
         name: "lseek",
         status: SyscallStatus::Implemented,
@@ -76,6 +102,31 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
     SyscallInfo {
         nr: SYS_FSTAT,
         name: "fstat",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_NEWFSTATAT,
+        name: "newfstatat",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_READLINKAT,
+        name: "readlinkat",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_FACCESSAT,
+        name: "faccessat",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_STATFS,
+        name: "statfs",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_FSTATFS,
+        name: "fstatfs",
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {

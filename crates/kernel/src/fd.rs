@@ -29,6 +29,7 @@ pub struct FdTable {
     entries: [Option<FdEntry>; MAX_FDS],
 }
 
+#[derive(Clone)]
 enum FdEntry {
     Console,
     File {
@@ -91,6 +92,36 @@ impl FdTable {
                 None,
                 None,
             ],
+        }
+    }
+
+    pub fn dup(&mut self, oldfd: usize, min_fd: usize) -> isize {
+        let Some(entry) = self.entries.get(oldfd).and_then(Option::as_ref).cloned() else {
+            return -9;
+        };
+        self.insert_at_or_after(entry, min_fd)
+            .map_or_else(|err| err, |fd| fd as isize)
+    }
+
+    pub fn dup_to(&mut self, oldfd: usize, newfd: usize) -> isize {
+        if oldfd == newfd {
+            return -22;
+        }
+        let Some(entry) = self.entries.get(oldfd).and_then(Option::as_ref).cloned() else {
+            return -9;
+        };
+        let Some(slot) = self.entries.get_mut(newfd) else {
+            return -9;
+        };
+        *slot = Some(entry);
+        newfd as isize
+    }
+
+    pub fn access(&self, fd: usize) -> isize {
+        if self.entries.get(fd).and_then(Option::as_ref).is_some() {
+            0
+        } else {
+            -9
         }
     }
 
@@ -196,6 +227,36 @@ impl FdTable {
         }
     }
 
+    pub fn stat_path(&self, path: &str) -> Result<FileStat, isize> {
+        let normalized = trim_path(path);
+        if normalized.is_empty() {
+            return Ok(FileStat {
+                mode: S_IFDIR | 0o555,
+                size: 0,
+                inode: 2,
+            });
+        }
+        match testdisk::list_dir(normalized) {
+            Ok(entries) => Ok(FileStat {
+                mode: S_IFDIR | 0o555,
+                size: entries.len() as u64,
+                inode: 0,
+            }),
+            Err(testdisk::TestDiskError::NotFound) => match testdisk::read_file(normalized) {
+                Ok(data) => Ok(FileStat {
+                    mode: S_IFREG | 0o555,
+                    size: data.len() as u64,
+                    inode: 0,
+                }),
+                Err(testdisk::TestDiskError::NoBlockDevice) => Err(-19),
+                Err(testdisk::TestDiskError::NotFound) => Err(-2),
+                Err(_) => Err(-5),
+            },
+            Err(testdisk::TestDiskError::NoBlockDevice) => Err(-19),
+            Err(_) => Err(-5),
+        }
+    }
+
     pub fn next_dirent(&mut self, fd: usize, available: usize) -> Result<ReadDirResult, isize> {
         let Some(FdEntry::Directory {
             entries, offset, ..
@@ -226,7 +287,17 @@ impl FdTable {
     }
 
     fn insert(&mut self, entry: FdEntry) -> Result<usize, isize> {
+        self.insert_at_or_after(entry, 3)
+    }
+
+    fn insert_at_or_after(&mut self, entry: FdEntry, min_fd: usize) -> Result<usize, isize> {
+        if min_fd >= MAX_FDS {
+            return Err(-22);
+        }
         for fd in 3..MAX_FDS {
+            if fd < min_fd {
+                continue;
+            }
             if self.entries[fd].is_none() {
                 self.entries[fd] = Some(entry);
                 return Ok(fd);
@@ -238,6 +309,10 @@ impl FdTable {
 
 pub fn linux_dirent64_reclen(name_len: usize) -> usize {
     align_up(19 + name_len + 1, 8)
+}
+
+pub fn trim_path(path: &str) -> &str {
+    path.trim_start_matches('/')
 }
 
 fn align_up(value: usize, align: usize) -> usize {

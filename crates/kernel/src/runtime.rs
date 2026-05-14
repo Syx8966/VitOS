@@ -12,10 +12,11 @@ mod imp {
     use core::time::Duration;
     use linux_abi::syscall::{
         SYS_BRK, SYS_CHDIR, SYS_CLONE, SYS_CLOSE, SYS_DUP, SYS_DUP3, SYS_EXECVE, SYS_EXIT,
-        SYS_FCNTL, SYS_FSTAT, SYS_GETCWD, SYS_GETDENTS64, SYS_GETPID, SYS_GETPPID,
-        SYS_GETTIMEOFDAY, SYS_IOCTL, SYS_LSEEK, SYS_MKDIRAT, SYS_MMAP, SYS_MOUNT, SYS_MUNMAP,
-        SYS_NANOSLEEP, SYS_OPENAT, SYS_PIPE2, SYS_READ, SYS_SCHED_YIELD, SYS_TIMES, SYS_UMOUNT2,
-        SYS_UNAME, SYS_UNLINKAT, SYS_WAIT4, SYS_WRITE,
+        SYS_FACCESSAT, SYS_FCNTL, SYS_FSTAT, SYS_FSTATFS, SYS_GETCWD, SYS_GETDENTS64, SYS_GETPID,
+        SYS_GETPPID, SYS_GETTID, SYS_GETTIMEOFDAY, SYS_IOCTL, SYS_LSEEK, SYS_MKDIRAT, SYS_MMAP,
+        SYS_MOUNT, SYS_MUNMAP, SYS_NANOSLEEP, SYS_NEWFSTATAT, SYS_OPENAT, SYS_PIPE2, SYS_READ,
+        SYS_READLINKAT, SYS_SCHED_YIELD, SYS_STATFS, SYS_TIMES, SYS_UMOUNT2, SYS_UNAME,
+        SYS_UNLINKAT, SYS_WAIT4, SYS_WRITE,
     };
     use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, va};
 
@@ -209,9 +210,20 @@ mod imp {
             SYS_WRITE => sys_write(tf.arg0(), tf.arg1(), tf.arg2()),
             SYS_CLOSE => sys_close(tf.arg0()),
             SYS_FSTAT => sys_fstat(tf.arg0(), tf.arg1()),
+            SYS_NEWFSTATAT => sys_newfstatat(tf.arg0() as isize, tf.arg1(), tf.arg2(), tf.arg3()),
+            SYS_READLINKAT => sys_readlinkat(tf.arg0() as isize, tf.arg1(), tf.arg2(), tf.arg3()),
+            SYS_FACCESSAT => sys_faccessat(tf.arg0() as isize, tf.arg1(), tf.arg2(), tf.arg3()),
+            SYS_STATFS => sys_statfs(tf.arg0(), tf.arg1()),
+            SYS_FSTATFS => sys_fstatfs(tf.arg0(), tf.arg1()),
             SYS_LSEEK => sys_lseek(tf.arg0(), tf.arg1() as isize, tf.arg2()),
             SYS_GETDENTS64 => sys_getdents64(tf.arg0(), tf.arg1(), tf.arg2()),
             SYS_OPENAT => sys_openat(tf.arg0() as isize, tf.arg1(), tf.arg2(), tf.arg3()),
+            SYS_DUP => sys_dup(tf.arg0()),
+            SYS_DUP3 => sys_dup3(tf.arg0(), tf.arg1(), tf.arg2()),
+            SYS_FCNTL => sys_fcntl(tf.arg0(), tf.arg1(), tf.arg2()),
+            SYS_IOCTL => sys_ioctl(tf.arg0(), tf.arg1(), tf.arg2()),
+            SYS_GETCWD => sys_getcwd(tf.arg0(), tf.arg1()),
+            SYS_CHDIR => sys_chdir(tf.arg0()),
             SYS_EXIT => sys_exit(tf.arg0()),
             SYS_BRK => sys_brk(tf.arg0()),
             SYS_MMAP => sys_mmap(
@@ -229,13 +241,13 @@ mod imp {
             SYS_UNAME => sys_uname(tf.arg0()),
             SYS_GETPID => 1,
             SYS_GETPPID => 0,
+            SYS_GETTID => 1,
             SYS_SCHED_YIELD => {
                 arceos_api::task::ax_yield_now();
                 0
             }
             SYS_MOUNT | SYS_UMOUNT2 => 0,
-            SYS_DUP | SYS_DUP3 | SYS_FCNTL | SYS_IOCTL | SYS_GETCWD | SYS_CHDIR | SYS_MKDIRAT
-            | SYS_UNLINKAT | SYS_PIPE2 | SYS_CLONE | SYS_EXECVE | SYS_WAIT4 => {
+            SYS_MKDIRAT | SYS_UNLINKAT | SYS_PIPE2 | SYS_CLONE | SYS_EXECVE | SYS_WAIT4 => {
                 #[cfg(feature = "axstd")]
                 println!("[syscall] unsupported pending-fs/proc nr={}", nr);
                 -38
@@ -323,6 +335,102 @@ mod imp {
         0
     }
 
+    fn sys_newfstatat(dirfd: isize, path_ptr: usize, stat_buf: usize, _flags: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        let resolved = if path.starts_with('/') || dirfd == -100 {
+            path
+        } else {
+            path
+        };
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let stat = match context.fds.stat_path(&resolved) {
+            Ok(stat) => stat,
+            Err(err) => return err,
+        };
+        let data = linux_stat_bytes(stat.mode, stat.size, stat.inode);
+        if write_user(stat_buf, &data).is_err() {
+            return -14;
+        }
+        0
+    }
+
+    fn sys_readlinkat(_dirfd: isize, path_ptr: usize, buf: usize, len: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        let target = if path == "/proc/self/exe" {
+            "/usr/bin/local-basic"
+        } else if path == "/" {
+            "/"
+        } else {
+            return -2;
+        };
+        let bytes = target.as_bytes();
+        let n = bytes.len().min(len);
+        if write_user(buf, &bytes[..n]).is_err() {
+            return -14;
+        }
+        n as isize
+    }
+
+    fn sys_faccessat(_dirfd: isize, path_ptr: usize, _mode: usize, _flags: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        match context.fds.stat_path(&path) {
+            Ok(_) => 0,
+            Err(err) => err,
+        }
+    }
+
+    fn sys_statfs(path_ptr: usize, buf: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let stat = match context.fds.stat_path(&path) {
+            Ok(stat) => stat,
+            Err(err) => return err,
+        };
+        let data = linux_statfs_bytes(stat.mode, stat.size);
+        if write_user(buf, &data).is_err() {
+            return -14;
+        }
+        0
+    }
+
+    fn sys_fstatfs(fd: usize, buf: usize) -> isize {
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        let stat = match context.fds.stat(fd) {
+            Ok(stat) => stat,
+            Err(err) => return err,
+        };
+        let data = linux_statfs_bytes(stat.mode, stat.size);
+        if write_user(buf, &data).is_err() {
+            return -14;
+        }
+        0
+    }
+
     fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
         match active_user_context_mut() {
             Ok(context) => context.fds.seek(fd, offset, whence),
@@ -341,6 +449,93 @@ mod imp {
                 Err(err) => err,
             },
             Err(err) => err,
+        }
+    }
+
+    fn sys_dup(oldfd: usize) -> isize {
+        match active_user_context_mut() {
+            Ok(context) => context.fds.dup(oldfd, 3),
+            Err(err) => err,
+        }
+    }
+
+    fn sys_dup3(oldfd: usize, newfd: usize, flags: usize) -> isize {
+        const O_CLOEXEC: usize = 0o2000000;
+        if flags & !O_CLOEXEC != 0 {
+            return -22;
+        }
+        match active_user_context_mut() {
+            Ok(context) => context.fds.dup_to(oldfd, newfd),
+            Err(err) => err,
+        }
+    }
+
+    fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
+        const F_DUPFD: usize = 0;
+        const F_GETFD: usize = 1;
+        const F_SETFD: usize = 2;
+        const F_GETFL: usize = 3;
+        const F_SETFL: usize = 4;
+        const F_DUPFD_CLOEXEC: usize = 1030;
+
+        let context = match active_user_context_mut() {
+            Ok(context) => context,
+            Err(err) => return err,
+        };
+        match cmd {
+            F_DUPFD | F_DUPFD_CLOEXEC => context.fds.dup(fd, arg),
+            F_GETFD => context.fds.access(fd),
+            F_SETFD => context.fds.access(fd),
+            F_GETFL => {
+                let status = context.fds.access(fd);
+                if status < 0 { status } else { 0 }
+            }
+            F_SETFL => context.fds.access(fd),
+            _ => -22,
+        }
+    }
+
+    fn sys_ioctl(fd: usize, request: usize, _arg: usize) -> isize {
+        const TIOCGWINSZ: usize = 0x5413;
+
+        let status = match active_user_context_mut() {
+            Ok(context) => context.fds.access(fd),
+            Err(err) => return err,
+        };
+        if status < 0 {
+            return status;
+        }
+        match request {
+            TIOCGWINSZ => -25,
+            _ => -25,
+        }
+    }
+
+    fn sys_getcwd(buf: usize, len: usize) -> isize {
+        let cwd = b"/\0";
+        if len < cwd.len() {
+            return -34;
+        }
+        if write_user(buf, cwd).is_err() {
+            return -14;
+        }
+        buf as isize
+    }
+
+    fn sys_chdir(path_ptr: usize) -> isize {
+        let path = match read_user_cstr(path_ptr) {
+            Ok(path) => path,
+            Err(err) => return err,
+        };
+        if path == "/" || path.is_empty() {
+            0
+        } else {
+            match crate::testdisk::list_dir(&path) {
+                Ok(_) => 0,
+                Err(crate::testdisk::TestDiskError::NotFound) => -2,
+                Err(crate::testdisk::TestDiskError::NoBlockDevice) => -19,
+                Err(_) => -20,
+            }
         }
     }
 
@@ -625,6 +820,17 @@ mod imp {
         stat[56..64].copy_from_slice(&4096_i64.to_ne_bytes());
         stat[64..72].copy_from_slice(&0_i64.to_ne_bytes());
         stat
+    }
+
+    fn linux_statfs_bytes(mode: u32, size: u64) -> [u8; 128] {
+        let mut statfs = [0_u8; 128];
+        statfs[0..8].copy_from_slice(&0xEF53_u64.to_ne_bytes());
+        statfs[8..16].copy_from_slice(&4096_u64.to_ne_bytes());
+        statfs[16..24].copy_from_slice(&4096_u64.to_ne_bytes());
+        statfs[24..32].copy_from_slice(&size.to_ne_bytes());
+        statfs[32..40].copy_from_slice(&size.to_ne_bytes());
+        statfs[48..56].copy_from_slice(&mode.to_ne_bytes());
+        statfs
     }
 
     fn arch_name() -> &'static str {
