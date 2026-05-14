@@ -25,6 +25,9 @@ pub const SYS_FACCESSAT: usize = 48;
 pub const SYS_STATFS: usize = 43;
 pub const SYS_FSTATFS: usize = 44;
 pub const SYS_NANOSLEEP: usize = 101;
+pub const SYS_EXIT_GROUP: usize = 94;
+pub const SYS_SET_TID_ADDRESS: usize = 96;
+pub const SYS_TGKILL: usize = 131;
 pub const SYS_SCHED_YIELD: usize = 124;
 pub const SYS_TIMES: usize = 153;
 pub const SYS_UNAME: usize = 160;
@@ -140,6 +143,11 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {
+        nr: SYS_EXIT_GROUP,
+        name: "exit_group",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
         nr: SYS_BRK,
         name: "brk",
         status: SyscallStatus::Implemented,
@@ -177,6 +185,36 @@ pub const BOOTSTRAP_SYSCALLS: &[SyscallInfo] = &[
     SyscallInfo {
         nr: SYS_GETPPID,
         name: "getppid",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_GETTID,
+        name: "gettid",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_SET_TID_ADDRESS,
+        name: "set_tid_address",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_CLONE,
+        name: "clone",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_EXECVE,
+        name: "execve",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_WAIT4,
+        name: "wait4",
+        status: SyscallStatus::Implemented,
+    },
+    SyscallInfo {
+        nr: SYS_TGKILL,
+        name: "tgkill",
         status: SyscallStatus::Implemented,
     },
     SyscallInfo {

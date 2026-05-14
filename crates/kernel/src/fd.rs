@@ -25,6 +25,7 @@ pub struct FileStat {
     pub inode: u64,
 }
 
+#[derive(Clone)]
 pub struct FdTable {
     entries: [Option<FdEntry>; MAX_FDS],
 }
@@ -129,14 +130,15 @@ impl FdTable {
         if dirfd != AT_FDCWD && !path.starts_with('/') {
             return Err(-22);
         }
-        if let Ok(entries) = testdisk::list_dir(path) {
+        let normalized = trim_path(path);
+        if let Ok(entries) = testdisk::list_dir(normalized) {
             return self.insert(FdEntry::Directory {
                 entries,
                 offset: 0,
                 inode: 0,
             });
         }
-        match testdisk::read_file(path) {
+        match testdisk::read_file(normalized) {
             Ok(data) => self.insert(FdEntry::File {
                 inode: 0,
                 data,

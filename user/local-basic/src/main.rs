@@ -191,6 +191,50 @@ _start:
     li t0, -25
     bne a0, t0, fail
 
+    li a0, 1
+    la a1, proc_msg
+    li a2, 14
+    li a7, 64
+    ecall
+
+    li a0, 17
+    li a1, 0
+    li a7, 220
+    ecall
+    beqz a0, proc_child
+    bltz a0, fail
+    mv s5, a0
+
+    mv a0, s5
+    addi a1, sp, 400
+    li a2, 0
+    li a3, 0
+    li a7, 260
+    ecall
+    bne a0, s5, fail
+    lw t0, 400(sp)
+    li t1, 768
+    bne t0, t1, fail
+
+    li a0, 1
+    la a1, proc_ok_msg
+    li a2, 27
+    li a7, 64
+    ecall
+    j proc_done
+
+proc_child:
+    li a0, 1
+    la a1, proc_child_msg
+    li a2, 11
+    li a7, 64
+    ecall
+    li a0, 3
+    li a7, 93
+    ecall
+
+proc_done:
+
     li a0, -100
     la a1, file_path
     addi a2, sp, 0
@@ -376,6 +420,12 @@ fstat_msg:
     .ascii "check: fstat()\n"
 fd_msg:
     .ascii "check: fd\n"
+proc_msg:
+    .ascii "check: proc()\n"
+proc_child_msg:
+    .ascii "proc child\n"
+proc_ok_msg:
+    .ascii "local-basic: proc smoke ok\n"
 fs_msg:
     .ascii "check: fs()\n"
 fs_ok_msg:
@@ -580,6 +630,50 @@ _start:
     bne $a0, $t0, fail
 
     li.d $a0, 1
+    la.local $a1, proc_msg
+    li.d $a2, 14
+    li.d $a7, 64
+    syscall 0
+
+    li.d $a0, 17
+    li.d $a1, 0
+    li.d $a7, 220
+    syscall 0
+    beqz $a0, proc_child
+    blt $a0, $zero, fail
+    move $s5, $a0
+
+    move $a0, $s5
+    addi.d $a1, $sp, 400
+    li.d $a2, 0
+    li.d $a3, 0
+    li.d $a7, 260
+    syscall 0
+    bne $a0, $s5, fail
+    ld.w $t0, $sp, 400
+    li.d $t1, 768
+    bne $t0, $t1, fail
+
+    li.d $a0, 1
+    la.local $a1, proc_ok_msg
+    li.d $a2, 27
+    li.d $a7, 64
+    syscall 0
+    b proc_done
+
+proc_child:
+    li.d $a0, 1
+    la.local $a1, proc_child_msg
+    li.d $a2, 11
+    li.d $a7, 64
+    syscall 0
+    li.d $a0, 3
+    li.d $a7, 93
+    syscall 0
+
+proc_done:
+
+    li.d $a0, 1
     la.local $a1, fs_msg
     li.d $a2, 12
     li.d $a7, 64
@@ -715,6 +809,12 @@ fstat_msg:
     .ascii "check: fstat()\n"
 fd_msg:
     .ascii "check: fd\n"
+proc_msg:
+    .ascii "check: proc()\n"
+proc_child_msg:
+    .ascii "proc child\n"
+proc_ok_msg:
+    .ascii "local-basic: proc smoke ok\n"
 fs_msg:
     .ascii "check: fs()\n"
 fs_ok_msg:
